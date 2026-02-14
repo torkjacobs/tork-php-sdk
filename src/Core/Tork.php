@@ -31,8 +31,12 @@ class Tork
 
     /**
      * Govern content for PII and policy violations.
+     *
+     * @param string $content The content to govern
+     * @param array|null $region Optional regional PII profiles (e.g. ['ae', 'in'])
+     * @param string|null $industry Optional industry profile (e.g. 'healthcare', 'finance', 'legal')
      */
-    public function govern(string $content): GovernanceResult
+    public function govern(string $content, ?array $region = null, ?string $industry = null): GovernanceResult
     {
         $piiDetected = $this->detectPII($content);
         $action = $this->determineAction($piiDetected);
@@ -50,7 +54,9 @@ class Tork
             action: $action,
             output: $output,
             pii: $piiDetected,
-            receipt: $receipt
+            receipt: $receipt,
+            region: $region,
+            industry: $industry
         );
     }
 

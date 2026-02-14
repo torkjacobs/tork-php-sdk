@@ -13,7 +13,9 @@ class GovernanceResult
         public readonly string $action,
         public readonly string $output,
         public readonly array $pii,
-        public readonly GovernanceReceipt $receipt
+        public readonly GovernanceReceipt $receipt,
+        public readonly ?array $region = null,
+        public readonly ?string $industry = null
     ) {}
 
     public function toArray(): array
@@ -23,6 +25,8 @@ class GovernanceResult
             'output' => $this->output,
             'pii' => $this->pii,
             'receipt' => $this->receipt->toArray(),
+            'region' => $this->region,
+            'industry' => $this->industry,
         ];
     }
 }

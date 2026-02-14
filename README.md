@@ -23,6 +23,30 @@ echo $result->action;  // "redact"
 echo $result->output;  // "Contact [EMAIL_REDACTED] or call [PHONE_REDACTED]"
 ```
 
+## Regional PII Detection (v1.1)
+
+Activate country-specific and industry-specific PII patterns:
+
+```php
+$tork = new Tork();
+
+// UAE regional detection — Emirates ID, +971 phone, PO Box
+$result = $tork->govern(
+    "Emirates ID: 784-1234-1234567-1",
+    region: ['ae']
+);
+
+// Multi-region + industry
+$result = $tork->govern(
+    "Aadhaar: 1234 5678 9012, ICD-10: J45.20",
+    region: ['in'],
+    industry: 'healthcare'
+);
+
+// Available regions: AU, US, GB, EU, AE, SA, NG, IN, JP, CN, KR, BR
+// Available industries: healthcare, finance, legal
+```
+
 ## Laravel Integration
 
 The SDK auto-registers via Laravel's package discovery.
