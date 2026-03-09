@@ -35,9 +35,18 @@ class Tork
      * @param string $content The content to govern
      * @param array|null $region Optional regional PII profiles (e.g. ['ae', 'in'])
      * @param string|null $industry Optional industry profile (e.g. 'healthcare', 'finance', 'legal')
+     * @param array|null $sessionContext Optional agent/session context with keys:
+     *   - agent_id (string|null): Identifier for the agent making the call
+     *   - agent_role (string|null): Role of the agent ("planner", "worker", or "judge")
+     *   - session_id (string|null): Groups all calls from the same agent session
+     *   - session_turn (int|null): Position in the conversation (1, 2, 3...)
      */
-    public function govern(string $content, ?array $region = null, ?string $industry = null): GovernanceResult
-    {
+    public function govern(
+        string $content,
+        ?array $region = null,
+        ?string $industry = null,
+        ?array $sessionContext = null
+    ): GovernanceResult {
         $piiDetected = $this->detectPII($content);
         $action = $this->determineAction($piiDetected);
         $output = $action === 'redact' ? $this->redact($content, $piiDetected) : $content;
@@ -56,7 +65,8 @@ class Tork
             pii: $piiDetected,
             receipt: $receipt,
             region: $region,
-            industry: $industry
+            industry: $industry,
+            sessionContext: $sessionContext
         );
     }
 

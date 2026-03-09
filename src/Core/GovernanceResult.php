@@ -9,18 +9,28 @@ namespace Tork\Governance\Core;
  */
 class GovernanceResult
 {
+    /**
+     * @param string $action
+     * @param string $output
+     * @param array $pii
+     * @param GovernanceReceipt $receipt
+     * @param array|null $region
+     * @param string|null $industry
+     * @param array|null $sessionContext Agent/session context with agent_id, agent_role, session_id, session_turn
+     */
     public function __construct(
         public readonly string $action,
         public readonly string $output,
         public readonly array $pii,
         public readonly GovernanceReceipt $receipt,
         public readonly ?array $region = null,
-        public readonly ?string $industry = null
+        public readonly ?string $industry = null,
+        public readonly ?array $sessionContext = null
     ) {}
 
     public function toArray(): array
     {
-        return [
+        $result = [
             'action' => $this->action,
             'output' => $this->output,
             'pii' => $this->pii,
@@ -28,5 +38,11 @@ class GovernanceResult
             'region' => $this->region,
             'industry' => $this->industry,
         ];
+
+        if ($this->sessionContext !== null) {
+            $result['session_context'] = $this->sessionContext;
+        }
+
+        return $result;
     }
 }
