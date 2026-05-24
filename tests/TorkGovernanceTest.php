@@ -112,7 +112,9 @@ class TorkGovernanceTest extends TestCase
         $tork = new Tork(['defaultAction' => 'deny']);
         $result = $tork->govern("SSN: 123-45-6789");
         $this->assertEquals('deny', $result->action);
-        $this->assertStringNotContainsString('[SSN_REDACTED]', $result->output);
+        // Output must always be redacted when PII is present, even on DENY action.
+        $this->assertStringContainsString('[SSN_REDACTED]', $result->output);
+        $this->assertStringNotContainsString('123-45-6789', $result->output);
     }
 
     public function testPolicyVersion(): void

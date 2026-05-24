@@ -49,7 +49,13 @@ class Tork
     ): GovernanceResult {
         $piiDetected = $this->detectPII($content);
         $action = $this->determineAction($piiDetected);
-        $output = $action === 'redact' ? $this->redact($content, $piiDetected) : $content;
+        // Always redact output when PII is present — DENY and ESCALATE must not leak raw input.
+        $output = !empty($piiDetected) ? $this->redact($content, $piiDetected) : $content;
+        // Sanitize PII match values before storing — never expose raw substrings in the result.
+        $sanitizedPii = array_map(
+            static fn(array $matches) => array_fill(0, count($matches), '[REDACTED]'),
+            $piiDetected
+        );
 
         $receipt = new GovernanceReceipt(
             receiptId: $this->generateReceiptId(),
@@ -62,7 +68,7 @@ class Tork
         return new GovernanceResult(
             action: $action,
             output: $output,
-            pii: $piiDetected,
+            pii: $sanitizedPii,
             receipt: $receipt,
             region: $region,
             industry: $industry,
