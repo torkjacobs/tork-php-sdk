@@ -1,6 +1,7 @@
 {
     "name": "tork/governance",
     "description": "On-device AI governance SDK - PII detection, redaction, and cryptographic receipts",
+    "version": "0.2.0",
     "type": "library",
     "license": "MIT",
     "keywords": ["ai", "governance", "pii", "redaction", "compliance", "security"],

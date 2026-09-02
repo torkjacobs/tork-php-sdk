@@ -77,6 +77,62 @@ class Tork
     }
 
     /**
+     * Scan a tool result for PII and prompt injection before it is appended
+     * to model context, and record the scan on a GovernanceReceipt.
+     *
+     * @param array{toolName: string, serverUri?: ?string, payload: mixed} $input
+     * @param array{blockOnInjection?: bool, customPatterns?: array<string,string>, maxDepth?: int} $options
+     *
+     * The receipt's `action` follows a four-way mapping:
+     *   blocked            -> 'deny'
+     *   injection findings -> 'escalate' (checked before pii, even if pii also present)
+     *   pii findings only  -> 'redact'
+     *   otherwise          -> 'allow'
+     *
+     * This SDK has no apiKey/attestation transport, so unlike the JS/Python
+     * SDKs there is no `report` field to return -- everything here is
+     * computed entirely on-device, synchronously, with zero network calls.
+     */
+    public function scanToolResult(array $input, array $options = []): ToolResultScanReport
+    {
+        $result = ToolResultScan::scan($input, $options);
+
+        $injectionCount = ToolResultScan::scanInjectionCount($result->findings);
+        $piiCount = ToolResultScan::scanPiiCount($result->findings);
+
+        $action = match (true) {
+            $result->blocked => 'deny',
+            $injectionCount > 0 => 'escalate',
+            $piiCount > 0 => 'redact',
+            default => 'allow',
+        };
+
+        $block = ToolResultScan::buildReceiptBlock(
+            $input['toolName'] ?? '',
+            $input['serverUri'] ?? null,
+            $result,
+            Version::SDK_VERSION
+        );
+
+        $receipt = new GovernanceReceipt(
+            receiptId: $this->generateReceiptId(),
+            timestamp: new \DateTimeImmutable(),
+            action: $action,
+            piiTypesDetected: ToolResultScan::scanPiiTypes($result->findings),
+            policyVersion: $this->config['policyVersion'],
+            toolResultScan: $block
+        );
+
+        return new ToolResultScanReport(
+            sanitized: $result->sanitized,
+            findings: $result->findings,
+            blocked: $result->blocked,
+            reason: $result->reason,
+            receipt: $receipt
+        );
+    }
+
+    /**
      * Detect PII in content.
      */
     private function detectPII(string $content): array
