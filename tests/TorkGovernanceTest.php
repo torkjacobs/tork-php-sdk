@@ -56,14 +56,18 @@ class TorkGovernanceTest extends TestCase
     {
         $result = $this->tork->govern("Card: 4111-1111-1111-1111");
         $this->assertEquals('redact', $result->action);
-        $this->assertStringContainsString('[CREDIT_CARD_REDACTED]', $result->output);
+        // Pre-1.0.0 label was [CREDIT_CARD_REDACTED]; unified with Pii::PII_PATTERNS's
+        // [CARD_REDACTED] -- see CHANGELOG.md "Breaking".
+        $this->assertStringContainsString('[CARD_REDACTED]', $result->output);
     }
 
     public function testDetectsIPAddress(): void
     {
         $result = $this->tork->govern("Server IP: 192.168.1.1");
         $this->assertEquals('redact', $result->action);
-        $this->assertStringContainsString('[IP_ADDRESS_REDACTED]', $result->output);
+        // Pre-1.0.0 label was [IP_ADDRESS_REDACTED]; unified with Pii::PII_PATTERNS's
+        // [IP_REDACTED] -- see CHANGELOG.md "Breaking".
+        $this->assertStringContainsString('[IP_REDACTED]', $result->output);
     }
 
     public function testRedactsMultiplePII(): void
@@ -127,8 +131,10 @@ class TorkGovernanceTest extends TestCase
     public function testPiiTypesInReceipt(): void
     {
         $result = $this->tork->govern("SSN: 123-45-6789, Email: test@test.com");
-        $this->assertContains('SSN', $result->receipt->piiTypesDetected);
-        $this->assertContains('EMAIL', $result->receipt->piiTypesDetected);
+        // Pre-1.0.0 type keys were uppercase (SSN, EMAIL); unified with Pii::PII_PATTERNS's
+        // lowercase snake_case keys ('ssn', 'email') -- see CHANGELOG.md "Breaking".
+        $this->assertContains('ssn', $result->receipt->piiTypesDetected);
+        $this->assertContains('email', $result->receipt->piiTypesDetected);
     }
 
     public function testNoPiiInReceipt(): void

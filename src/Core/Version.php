@@ -10,5 +10,5 @@ namespace Tork\Governance\Core;
  */
 final class Version
 {
-    public const SDK_VERSION = '0.2.0';
+    public const SDK_VERSION = '1.0.0';
 }

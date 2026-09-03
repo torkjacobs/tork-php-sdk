@@ -6,9 +6,12 @@ namespace Tork\Governance\Core;
 
 /**
  * The on-device PII detector: Tier 1 basic vocabulary (10 types), ported
- * byte-for-byte from tork-js-sdk's pii.ts so the SAME detector can be reused
- * by both Tork::govern()'s legacy pattern set and the tool-result-scan port
- * (DECIDED-TACT2-V2-C) without a second, drifting implementation.
+ * byte-for-byte from tork-js-sdk's pii.ts. This is the ONLY PII pattern
+ * table in the PHP SDK -- Tork::govern() and the tool-result-scan port
+ * (DECIDED-TACT2-V2-C) both detect through Pii::detect() so the two paths
+ * cannot drift into two vocabularies. Prior to 1.0.0, govern() ran its own
+ * separate 5-pattern table with uppercase type keys; that table has been
+ * removed, not kept alongside this one as a shim.
  *
  * Type keys and redaction labels are JS-identical (lowercase snake_case
  * types, e.g. 'ip_address' -> '[IP_REDACTED]') so a receipt produced by this

@@ -9,11 +9,20 @@ namespace Tork\Governance\Core;
  *
  * Provides PII detection, redaction, and compliance receipts
  * for AI applications.
+ *
+ * govern() and scanToolResult() both detect PII through the single Tier 1
+ * table in Pii::PII_PATTERNS (see Pii.php) -- lowercase snake_case type
+ * keys and JS-identical [XXX_REDACTED] labels throughout this SDK. Prior to
+ * 1.0.0, govern() ran its own separate 5-pattern table with uppercase type
+ * keys (SSN, EMAIL, PHONE, CREDIT_CARD, IP_ADDRESS); see CHANGELOG.md for
+ * the full old-label/key -> new-label/key mapping.
  */
 class Tork
 {
     private array $config;
-    private array $patterns;
+
+    /** @var array<string, string>|null */
+    private ?array $customPatterns;
 
     public function __construct(array $config = [])
     {
@@ -22,11 +31,7 @@ class Tork
             'policyVersion' => '1.0.0',
         ], $config);
 
-        $this->patterns = $this->getDefaultPatterns();
-
-        if (isset($config['customPatterns'])) {
-            $this->patterns = array_merge($this->patterns, $config['customPatterns']);
-        }
+        $this->customPatterns = $config['customPatterns'] ?? null;
     }
 
     /**
@@ -47,21 +52,24 @@ class Tork
         ?string $industry = null,
         ?array $sessionContext = null
     ): GovernanceResult {
-        $piiDetected = $this->detectPII($content);
-        $action = $this->determineAction($piiDetected);
+        $detection = Pii::detect($content, $this->customPatterns);
+        $action = $detection['hasPII'] ? $this->config['defaultAction'] : 'allow';
         // Always redact output when PII is present — DENY and ESCALATE must not leak raw input.
-        $output = !empty($piiDetected) ? $this->redact($content, $piiDetected) : $content;
-        // Sanitize PII match values before storing — never expose raw substrings in the result.
-        $sanitizedPii = array_map(
-            static fn(array $matches) => array_fill(0, count($matches), '[REDACTED]'),
-            $piiDetected
-        );
+        // Pii::detect()'s redactedText already has custom patterns applied too, so it is used
+        // unconditionally rather than only when hasPII is true.
+        $output = $detection['redactedText'];
+        // Group already-sanitized match values ('[REDACTED]') by type — never expose raw
+        // substrings or PII match values in the result.
+        $sanitizedPii = [];
+        foreach ($detection['matches'] as $match) {
+            $sanitizedPii[$match['type']][] = $match['value'];
+        }
 
         $receipt = new GovernanceReceipt(
             receiptId: $this->generateReceiptId(),
             timestamp: new \DateTimeImmutable(),
             action: $action,
-            piiTypesDetected: array_keys($piiDetected),
+            piiTypesDetected: $detection['types'],
             policyVersion: $this->config['policyVersion']
         );
 
@@ -133,68 +141,10 @@ class Tork
     }
 
     /**
-     * Detect PII in content.
-     */
-    private function detectPII(string $content): array
-    {
-        $detected = [];
-
-        foreach ($this->patterns as $type => $pattern) {
-            if (preg_match_all($pattern, $content, $matches)) {
-                $detected[$type] = $matches[0];
-            }
-        }
-
-        return $detected;
-    }
-
-    /**
-     * Determine action based on detected PII.
-     */
-    private function determineAction(array $piiDetected): string
-    {
-        if (empty($piiDetected)) {
-            return 'allow';
-        }
-
-        return $this->config['defaultAction'];
-    }
-
-    /**
-     * Redact PII from content.
-     */
-    private function redact(string $content, array $piiDetected): string
-    {
-        $redacted = $content;
-
-        foreach ($piiDetected as $type => $matches) {
-            foreach ($matches as $match) {
-                $redacted = str_replace($match, "[{$type}_REDACTED]", $redacted);
-            }
-        }
-
-        return $redacted;
-    }
-
-    /**
      * Generate unique receipt ID.
      */
     private function generateReceiptId(): string
     {
         return 'tork_' . bin2hex(random_bytes(16));
-    }
-
-    /**
-     * Get default PII patterns.
-     */
-    private function getDefaultPatterns(): array
-    {
-        return [
-            'SSN' => '/\b\d{3}-\d{2}-\d{4}\b/',
-            'EMAIL' => '/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/',
-            'PHONE' => '/\b(?:\+1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b/',
-            'CREDIT_CARD' => '/\b(?:\d{4}[-\s]?){3}\d{4}\b/',
-            'IP_ADDRESS' => '/\b(?:\d{1,3}\.){3}\d{1,3}\b/',
-        ];
     }
 }

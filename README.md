@@ -23,6 +23,21 @@ echo $result->action;  // "redact"
 echo $result->output;  // "Contact [EMAIL_REDACTED] or call [PHONE_REDACTED]"
 ```
 
+## Upgrading to 1.0.0
+
+`Tork::govern()` now detects PII through the same 10-type Tier 1 table
+`Tork::scanToolResult()` already used (`Pii::PII_PATTERNS`), instead of its
+own separate 5-pattern set — the two no longer drift into different results
+for the same input. `piiTypesDetected` type keys are now lowercase
+`snake_case` (`ssn`, not `SSN`), the `credit_card` and `ip_address` redaction
+labels changed to `[CARD_REDACTED]` and `[IP_REDACTED]` (the other three —
+`ssn`, `email`, `phone` — kept their existing labels), five more types are
+now detected (`address`, `date_of_birth`, `passport`, `drivers_license`,
+`bank_account`), and a `customPatterns` match alone no longer drives
+`$result->action` to `redact`/`deny`/`escalate` on its own (it still redacts
+`$output` text). See [CHANGELOG.md](CHANGELOG.md#100---2026-09-03) for the
+full old-label/key → new-label/key mapping.
+
 ## Regional PII Detection (v1.1)
 
 > **Known gap:** `$region` and `$industry` are accepted by `Tork::govern()` and stored on the returned `GovernanceResult`, but no regional or industry-specific pattern set is implemented yet in this PHP SDK — `govern()` still only runs the base pattern set below against the content regardless of which regions/industries are passed. The examples in this section describe the target behavior (matching the JS/Python SDKs), not current PHP behavior. Tracked as a P1 follow-up.
@@ -136,7 +151,7 @@ $report->findings;
 
 There is also a standalone `Tork\Governance\Core\ToolResultScan::scan($input, $options)` with the same input/options shape that returns a `ToolResultScanResult` (`sanitized`, `findings`, `blocked`, `reason`) and produces no receipt.
 
-- **PII uses the same on-device detector (`Pii::detect()`) as `scanToolResult()` throughout this feature** — the Tier 1 basic vocabulary below, JS-identical type labels and redaction placeholders. Matches are masked in place; the payload structure is otherwise unchanged, and a clean payload comes back untouched. This SDK's `Tork::govern()` uses its own separate, smaller legacy pattern set (see [Supported PII Types](#supported-pii-types)) — the two are not yet unified; see the parity note at the end of this section.
+- **PII uses the same on-device detector (`Pii::detect()`) as `Tork::govern()` throughout this SDK** — the Tier 1 basic vocabulary below, JS-identical type labels and redaction placeholders, since 1.0.0 (see [Upgrading to 1.0.0](#upgrading-to-100) if migrating from an earlier version). Matches are masked in place; the payload structure is otherwise unchanged, and a clean payload comes back untouched.
 - **Injection detection is heuristic.** A conservative pattern set (`tork-injection-heuristics-v1`) covering instruction-override phrases, role reassignment, and exfiltration URLs — ported line-for-line from the JS SDK's regex sources. Every injection finding is typed `heuristic:<name>` because that is exactly what it is: a regex match over untrusted text, with false positives and false negatives, not a verified determination. Without `blockOnInjection`, matches are reported and the result is still returned; with it, `sanitized` is `null` so no masked copy can be appended by accident.
 - **Zero network calls.** The scan is pure and synchronous PHP — no curl handle, no stream-wrapper I/O, no socket is ever opened on this path.
 - **Recorded on the receipt as counts only.** `$report->receipt->toolResultScan` carries `attested_by: 'client'`, `capture_mode: 'edge'`, the tool name and server URI, counts by kind and type, the blocked flag, and the SDK version — snake_case keys in alphabetical order, optional keys (`reason`, `server_uri`) omitted rather than nulled, byte-identical in shape to the JS and Python SDKs' `tool_result_scan` block. It never carries the payload, a matched value, or a location path.
