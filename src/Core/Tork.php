@@ -52,7 +52,9 @@ class Tork
         ?string $industry = null,
         ?array $sessionContext = null
     ): GovernanceResult {
-        $detection = Pii::detect($content, $this->customPatterns);
+        // $region now drives detection. Until 1.1.0 it was accepted, echoed back on
+        // the result, and never used to select a pattern.
+        $detection = Pii::detect($content, $this->customPatterns, $region);
         $action = $detection['hasPII'] ? $this->config['defaultAction'] : 'allow';
         // Always redact output when PII is present — DENY and ESCALATE must not leak raw input.
         // Pii::detect()'s redactedText already has custom patterns applied too, so it is used

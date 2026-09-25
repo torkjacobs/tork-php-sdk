@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tork\Governance\Core;
 
+use Tork\Governance\Pii\PiiCountry;
+
 /**
  * The on-device PII detector: Tier 1 basic vocabulary (10 types), ported
  * byte-for-byte from tork-js-sdk's pii.ts. This is the ONLY PII pattern
@@ -100,22 +102,110 @@ final class Pii
      *   counted, so they can change redactedText without producing a match.
      * @return array{hasPII: bool, types: list<string>, count: int, matches: list<array{type: string, value: string}>, redactedText: string}
      */
-    public static function detect(string $text, ?array $customPatterns = null): array
+    public static function detect(string $text, ?array $customPatterns = null, ?array $regionOverride = null): array
     {
         $matches = [];
         $detectedTypes = [];
-        $redactedText = $text;
 
+        // L0: collect every match against the ORIGINAL text.
+        //
+        // REDACTION IS ONE PASS. Until 1.0.0 each type was redacted with its own
+        // preg_replace over text a previous type had already rewritten, and the
+        // match list carried no offsets at all. Two types matching overlapping
+        // spans could leave half an identifier standing beside a redaction
+        // token -- digits exposed in output the caller had been told was
+        // redacted. Every match is now collected against the original text,
+        // overlaps are resolved before anything is rewritten, and the surviving
+        // spans are spliced right to left in a single pass.
+        $l0 = [];
         foreach (self::PII_PATTERNS as $type => $spec) {
-            $count = preg_match_all($spec['pattern'], $text);
-            if ($count) {
-                $detectedTypes[$type] = true;
-                for ($i = 0; $i < $count; $i++) {
-                    $matches[] = ['type' => $type, 'value' => '[REDACTED]'];
+            $hits = [];
+            preg_match_all($spec['pattern'], $text, $hits, PREG_OFFSET_CAPTURE);
+            foreach ($hits[0] as $hit) {
+                if ($hit[0] === '') {
+                    continue;
+                }
+                $l0[] = [
+                    'type' => $type,
+                    'start' => $hit[1],
+                    'end' => $hit[1] + strlen($hit[0]),
+                    'redaction' => $spec['redaction'],
+                ];
+            }
+        }
+
+        // Country layer. An explicit region from the caller is authoritative;
+        // otherwise the profiles are activated from the content itself.
+        $regions = ($regionOverride !== null && $regionOverride !== [])
+            ? array_map('strtoupper', $regionOverride)
+            : PiiCountry::inferRegions($text);
+        $countryMatches = PiiCountry::detect($text, PiiCountry::patternsForRegions($regions));
+
+        // Resolve overlaps before anything is rewritten. A country identifier
+        // supersedes any L0 span it fully contains -- the cloud does the same,
+        // which is how a Saudi national ID stops coming back as
+        // [PHONE_REDACTED].
+        $claimed = [];
+        $spans = [];
+        foreach ($countryMatches as $c) {
+            $claimed[] = [$c['startIndex'], $c['endIndex']];
+            $spans[] = [
+                'startIndex' => $c['startIndex'],
+                'endIndex' => $c['endIndex'],
+                'redaction' => $c['redaction'],
+            ];
+        }
+
+        foreach ($l0 as $hit) {
+            $s = $hit['start'];
+            $e = $hit['end'];
+            $overlapping = [];
+            foreach ($claimed as $c) {
+                if ($s < $c[1] && $e > $c[0]) {
+                    $overlapping[] = $c;
                 }
             }
-            $redactedText = preg_replace($spec['pattern'], $spec['redaction'], $redactedText);
+            if ($overlapping !== []) {
+                $swallowsAll = true;
+                foreach ($overlapping as $c) {
+                    [$cs, $ce] = PiiCountry::trimmedCore($text, $c[0], $c[1]);
+                    if (!($s <= $cs && $e >= $ce)) {
+                        $swallowsAll = false;
+                        break;
+                    }
+                }
+                if (!$swallowsAll) {
+                    continue;
+                }
+                // An L0 span that fully contains a country span still loses:
+                // the country label is the more specific claim.
+                $hitsCountry = false;
+                foreach ($overlapping as $o) {
+                    foreach ($countryMatches as $c) {
+                        if ($c['startIndex'] === $o[0] && $c['endIndex'] === $o[1]) {
+                            $hitsCountry = true;
+                            break 2;
+                        }
+                    }
+                }
+                if ($hitsCountry) {
+                    continue;
+                }
+                foreach ($overlapping as $o) {
+                    $claimed = array_values(array_filter($claimed, static fn ($c) => $c !== $o));
+                    $spans = array_values(array_filter(
+                        $spans,
+                        static fn ($sp) => $sp['startIndex'] !== $o[0] || $sp['endIndex'] !== $o[1]
+                    ));
+                }
+            }
+            $claimed[] = [$s, $e];
+            $spans[] = ['startIndex' => $s, 'endIndex' => $e, 'redaction' => $hit['redaction']];
+            $detectedTypes[$hit['type']] = true;
+            $matches[] = ['type' => $hit['type'], 'value' => '[REDACTED]'];
         }
+
+        $redactedText = PiiCountry::applyRedactions($text, $spans);
 
         if ($customPatterns !== null) {
             foreach ($customPatterns as $name => $pattern) {
@@ -123,12 +213,20 @@ final class Pii
             }
         }
 
+        $countryLabels = [];
+        foreach ($countryMatches as $c) {
+            $countryLabels[$c['label']] = true;
+        }
+
         return [
-            'hasPII' => count($matches) > 0,
+            'hasPII' => count($matches) + count($countryMatches) > 0,
             'types' => array_keys($detectedTypes),
-            'count' => count($matches),
+            'count' => count($matches) + count($countryMatches),
             'matches' => $matches,
             'redactedText' => $redactedText,
+            'countryMatches' => $countryMatches,
+            'countryLabels' => array_keys($countryLabels),
+            'regions' => $regions,
         ];
     }
 }
