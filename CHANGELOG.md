@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.2.0 - 2026-10-03
+
+### Added
+- Agent telemetry on `Tork::govern()`: the optional `$sessionContext` array
+  accepts `agent_id`, `agent_role`, `session_id` (strings) and `session_turn`
+  (int). Set fields are passed through to `GovernanceResult::$sessionContext`
+  and `toArray()['session_context']`; unset (null) fields and unknown keys are
+  omitted, and the whole key is omitted when nothing is set. A non-string
+  id/role or non-integer turn throws `InvalidArgumentException`.
+- `PiiDeclaredTypesTest`: every declared PII type has a working pattern and a
+  positive and a negative example, for both the 10 Tier 1 types and all 54
+  country-layer types; fails if a declared type has no pattern or a pattern is
+  undeclared.
+
+### Changed
+- PII types: audited all 64 declared types (10 Tier 1 + 54 country). All have
+  working patterns; none were removed.
+
+### Fixed
+- README country-layer counts corrected to match the registry (24 profiles,
+  54 patterns, bundle 1.2.0).
+
 ## 1.1.0 - 2026-09-25
 
 ### Added

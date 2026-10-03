@@ -54,6 +54,7 @@ class Tork
     ): GovernanceResult {
         // $region now drives detection. Until 1.1.0 it was accepted, echoed back on
         // the result, and never used to select a pattern.
+        $sessionContext = self::normalizeSessionContext($sessionContext);
         $detection = Pii::detect($content, $this->customPatterns, $region);
         $action = $detection['hasPII'] ? $this->config['defaultAction'] : 'allow';
         // Always redact output when PII is present — DENY and ESCALATE must not leak raw input.
@@ -140,6 +141,48 @@ class Tork
             reason: $result->reason,
             receipt: $receipt
         );
+    }
+
+    /**
+     * Normalize the optional agent/session telemetry fields.
+     *
+     * Only agent_id, agent_role, session_id (strings) and session_turn (int)
+     * are passed through; unset (null) fields and unknown keys are dropped,
+     * and an empty result is null so the field is omitted entirely from
+     * GovernanceResult::toArray(). A wrongly typed value is a caller bug and
+     * is rejected rather than silently coerced into the receipt telemetry.
+     *
+     * @param array<string, mixed>|null $context
+     * @return array<string, string|int>|null
+     * @throws \InvalidArgumentException on a non-string id/role or non-int turn
+     */
+    private static function normalizeSessionContext(?array $context): ?array
+    {
+        if ($context === null) {
+            return null;
+        }
+
+        $out = [];
+        foreach (['agent_id', 'agent_role', 'session_id'] as $key) {
+            $value = $context[$key] ?? null;
+            if ($value === null) {
+                continue;
+            }
+            if (!is_string($value)) {
+                throw new \InvalidArgumentException("sessionContext.{$key} must be a string or null.");
+            }
+            $out[$key] = $value;
+        }
+
+        $turn = $context['session_turn'] ?? null;
+        if ($turn !== null) {
+            if (!is_int($turn)) {
+                throw new \InvalidArgumentException('sessionContext.session_turn must be an integer or null.');
+            }
+            $out['session_turn'] = $turn;
+        }
+
+        return $out === [] ? null : $out;
     }
 
     /**
