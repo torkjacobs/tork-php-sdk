@@ -40,15 +40,15 @@ full old-label/key → new-label/key mapping.
 
 ## Country PII detection
 
-23 country profiles, 50 patterns and 20 check digits, generated from Tork's own
-country registry (bundle `1.0.0`) and computed entirely on-device.
+24 country profiles, 54 patterns and 20 check digits, generated from Tork's own
+country registry (bundle `1.2.0`) and computed entirely on-device.
 
 Countries: AU, US, GB, EU, AE, SA, NG, IN, JP, CN, KR, BR, CA, ZA, GH, IT, KE,
-MU, MX, MY, PK, SG, TH.
+MU, MX, MY, PK, SG, TH, ID.
 
 A country's patterns switch on when the text activates that country — the same
 content signals the cloud uses — so ordinary business text is not measured
-against 50 national-identifier patterns it could never contain. On the
+against 54 national-identifier patterns it could never contain. On the
 1,159-line business corpus this SDK is tested against, nothing is redacted.
 
 ```php
@@ -84,6 +84,25 @@ Three gates keep the false-positive rate down, and all three must pass:
 
 Still cloud-only, and not in this SDK: the near-miss fallback, the slot,
 context, gravity and name layers, industry profiles, and org configuration.
+
+## Agent telemetry
+
+`govern()` accepts an optional `$sessionContext` with four optional fields:
+`agent_id`, `agent_role`, `session_id` (strings) and `session_turn` (int).
+Fields you set are passed through to the result; fields you leave out (or set
+to `null`) are omitted, and so is `session_context` when none are set. Unknown
+keys are dropped; a wrongly typed value throws `InvalidArgumentException`.
+
+```php
+$result = $tork->govern($text, sessionContext: [
+    'agent_id' => 'agent-7',
+    'agent_role' => 'planner',
+    'session_id' => 'sess-1',
+    'session_turn' => 3,
+]);
+
+$result->toArray()['session_context']; // ['agent_id' => 'agent-7', ...]
+```
 
 ## Laravel Integration
 
